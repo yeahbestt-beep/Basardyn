@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>13 Kardeş 🤝</title>
+<style>
+:root{color-scheme:dark;--bg:#0a1020;--panel:#131c32;--line:#2d3958;--muted:#aeb9d6;--accent:#7566f2}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#f6f7ff;font:16px/1.45 system-ui,-apple-system,sans-serif}
+header{padding:26px 16px;text-align:center;background:linear-gradient(135deg,#171f3d,#35275e);border-bottom:1px solid var(--line)}
+h1{font-size:clamp(28px,6vw,42px);margin:0}header p{margin:7px 0 0;color:var(--muted)}
+.wrap{max-width:1000px;margin:auto;padding:16px}
+.tabs{display:flex;gap:8px;overflow-x:auto;padding:4px 0 12px}
+.tab{width:auto;white-space:nowrap;flex:0 0 auto;padding:10px 15px;background:#151d33;border:1px solid var(--line);border-radius:12px;color:#fff;cursor:pointer}
+.tab.active{background:var(--accent);border-color:var(--accent)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin:10px 0}
+h2{font-size:21px;margin:0 0 12px}.muted{color:var(--muted);font-size:14px}
+.students{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:10px}
+.student{width:100%;min-height:115px;background:#10182b;border:1px solid var(--line);border-radius:14px;padding:12px;color:#fff;cursor:pointer}
+.student.selected{border:2px solid #958aff;background:#242248}
+.avatar{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;margin:0 auto 8px;background:linear-gradient(135deg,#7867f7,#b15fd3);font-size:20px;font-weight:800}
+.student-name{display:block;overflow-wrap:anywhere}
+input,textarea,select{display:block;width:100%;margin:8px 0;padding:12px;background:#0b1326;color:#fff;border:1px solid var(--line);border-radius:10px;font:inherit}
+.action{background:var(--accent);border:0;border-radius:10px;padding:12px 16px;color:#fff;font:inherit;font-weight:700;cursor:pointer}
+.action:disabled{opacity:.55}.item{background:#0b1326;border:1px solid var(--line);border-radius:10px;padding:12px;margin:9px 0;overflow-wrap:anywhere}.hidden{display:none!important}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}
+</style></head>
+<body>
+<header><h1>13 Kardeş 🤝</h1><p>Sınıfımızın kendi köşesi</p></header>
+<main class="wrap">
+<nav class="tabs" aria-label="Bölümler">
+<button class="tab active" data-tab="studentsTab">Öğrenciler</button>
+<button class="tab" data-tab="commentsTab">Yorumlar</button>
+<button class="tab" data-tab="postsTab">Sınıf panosu</button>
+<button class="tab" data-tab="pollTab">Anketler</button>
+</nav>
+
+<section id="studentsTab" class="panel">
+<h2>Öğrenciler</h2><p class="muted">Bir öğrenciyi seçip profilini ve yorumlarını görebilirsin.</p>
+<div id="students" class="students"></div>
+</section>
+
+<section id="commentsTab" class="panel hidden">
+<h2 id="commentHeading">Yorumlar</h2><p class="muted">Lütfen saygılı ol. Yorumlar herkese açık görünür.</p>
+<input id="commentName" maxlength="100" placeholder="Adın (veya Anonim)">
+<textarea id="commentText" rows="3" maxlength="300" placeholder="Yorum yaz..."></textarea>
+<button class="action" id="sendComment">Yorumu gönder</button><p class="muted" id="commentStatus"></p><div id="comments"></div>
+</section>
+
+<section id="postsTab" class="panel hidden">
+<h2>Sınıf panosu</h2><p class="muted">Sınıfla paylaşmak istediğin kısa bir mesaj yaz.</p>
+<input id="postName" maxlength="100" placeholder="Adın (veya Anonim)">
+<textarea id="postText" rows="3" maxlength="1000" placeholder="Panoya mesaj yaz..."></textarea>
+<button class="action" id="sendPost">Paylaş</button><p class="muted" id="postStatus"></p><div id="posts"></div>
+</section>
+
+<section id="pollTab" class="panel hidden">
+<h2>Anketler</h2><p class="muted">Yeni anket oluşturmak için soruyu ve iki seçeneği yaz.</p>
+<input id="pollQuestion" maxlength="300" placeholder="Anket sorusu">
+<input id="option1" maxlength="150" placeholder="1. seçenek">
+<input id="option2" maxlength="150" placeholder="2. seçenek">
+<button class="action" id="sendPoll">Anket oluştur</button><p class="muted" id="pollStatus"></p><div id="polls"></div>
+</section>
+</main><footer>13 Kardeş · Kişisel bilgilerini ve başkalarını incitecek içerikleri paylaşma.</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(() => {
+const SUPABASE_URL = 'https://xjuojpsjjxibasdfcrhs.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_Mq5b0Ov7_786zHo1QwceNQ_S_Y5bO4t';
+const students = ['Dinmuhammet','Eyup','Şirgeldi','Perman','Süleyman','Kerwen','Gazak','Amatly','Davut🖤','Hamza','Sähet','Seyfulla','Didar'];
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let selectedStudent = students[0];
+let db = null;
+if (window.supabase && window.supabase.createClient) db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function showTab(tabId) {
+ document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
+ ['studentsTab','commentsTab','postsTab','pollTab'].forEach(id => $(id).classList.toggle('hidden', id !== tabId));
+ if(tabId === 'commentsTab') loadComments();
+ if(tabId === 'postsTab') loadPosts();
+ if(tabId === 'pollTab') loadPolls();
+}
+document.querySelector('.tabs').addEventListener('click', e => {
+ const b = e.target.closest('[data-tab]'); if(b) showTab(b.dataset.tab);
+});
+$('students').innerHTML = students.map((n,i) => `<button class="student${i===0?' selected':''}" data-student="${esc(n)}"><span class="avatar">${esc([...n][0].toUpperCase())}</span><span class="student-name">${esc(n)}</span></button>`).join('');
+$('students').addEventListener('click', e => {
+ const b = e.target.closest('[data-student]'); if(!b) return;
+ selectedStudent = b.dataset.student;
+ document.querySelectorAll('.student').forEach(x => x.classList.toggle('selected', x === b));
+ $('commentHeading').textContent = selectedStudent + ' için yorumlar';
+ showTab('commentsTab');
+});
+
+async function loadComments(){
+ if(!db){$('comments').textContent='Supabase istemcisi yüklenemedi. İnternet bağlantını kontrol et.';return;}
+ const {data,error}=await db.from('comments').select('id,student_name,comment,created_at').eq('student_name',selectedStudent).order('created_at',{ascending:false}).limit(50);
+ if(error){$('comments').innerHTML='<p class="muted">Yorumlar yüklenemedi. Supabase SQL kodunu doğru projede çalıştır ve API izinlerini kontrol et.</p>';return;}
+ $('comments').innerHTML=(data||[]).map(c=>`<div class="item"><b>${esc(c.student_name)}</b><div>${esc(c.comment)}</div><div class="muted">${new Date(c.created_at).toLocaleString()}</div></div>`).join('')||'<p class="muted">Henüz yorum yok.</p>';
+}
+$('sendComment').addEventListener('click',async()=>{
+ const student_name=$('commentName').value.trim()||'Anonim', comment=$('commentText').value.trim();
+ if(!comment){$('commentStatus').textContent='Önce yorum yaz.';return;}
+ if(!db){$('commentStatus').textContent='Supabase bağlantısı kurulamadı.';return;}
+ $('sendComment').disabled=true; const {error}=await db.from('comments').insert({student_name,comment}); $('sendComment').disabled=false;
+ if(error){$('commentStatus').textContent='Gönderilemedi: '+error.message;return;}
+ $('commentText').value='';$('commentStatus').textContent='Yorum gönderildi.';loadComments();
+});
+async function loadPosts(){
+ if(!db){$('posts').textContent='Supabase bağlantısı kurulamadı.';return;}
+ const {data,error}=await db.from('class_posts').select('id,student_name,content,created_at').order('created_at',{ascending:false}).limit(50);
+ if(error){$('posts').innerHTML='<p class="muted">Pano yüklenemedi. Önce class_posts tablosunu ve izinlerini SQL ile oluştur.</p>';return;}
+ $('posts').innerHTML=(data||[]).map(p=>`<div class="item"><b>${esc(p.student_name)}</b><div>${esc(p.content)}</div><div class="muted">${new Date(p.created_at).toLocaleString()}</div></div>`).join('')||'<p class="muted">Henüz paylaşım yok.</p>';
+}
+$('sendPost').addEventListener('click',async()=>{
+ const student_name=$('postName').value.trim()||'Anonim',content=$('postText').value.trim();
+ if(!content){$('postStatus').textContent='Önce mesaj yaz.';return;} if(!db){$('postStatus').textContent='Supabase bağlantısı kurulamadı.';return;}
+ const {error}=await db.from('class_posts').insert({student_name,content});
+ if(error){$('postStatus').textContent='Paylaşılamadı: '+error.message;return;}
+ $('postText').value='';$('postStatus').textContent='Paylaşıldı.';loadPosts();
+});
+async function loadPolls(){
+ if(!db){$('polls').textContent='Supabase bağlantısı kurulamadı.';return;}
+ const {data,error}=await db.from('class_polls').select('id,question,student_name,created_at').order('created_at',{ascending:false}).limit(30);
+ if(error){$('polls').innerHTML='<p class="muted">Anketler yüklenemedi. Önce class_polls tablosunu ve izinlerini SQL ile oluştur.</p>';return;}
+ $('polls').innerHTML=(data||[]).map(p=>`<div class="item"><b>${esc(p.question)}</b><div class="muted">Oluşturan: ${esc(p.student_name)} · ${new Date(p.created_at).toLocaleString()}</div></div>`).join('')||'<p class="muted">Henüz anket yok.</p>';
+}
+$('sendPoll').addEventListener('click',async()=>{
+ const question=$('pollQuestion').value.trim(), a=$('option1').value.trim(), b=$('option2').value.trim();
+ if(!question||!a||!b){$('pollStatus').textContent='Soru ve iki seçeneği doldur.';return;}
+ if(!db){$('pollStatus').textContent='Supabase bağlantısı kurulamadı.';return;}
+ const {data,error}=await db.from('class_polls').insert({question,student_name:'Anonim'}).select('id').single();
+ if(error){$('pollStatus').textContent='Anket oluşturulamadı: '+error.message;return;}
+ const {error:optError}=await db.from('poll_options').insert([{poll_id:data.id,option_text:a},{poll_id:data.id,option_text:b}]);
+ if(optError){$('pollStatus').textContent='Anket sorusu oluştu ama seçenekler eklenemedi: '+optError.message;return;}
+ $('pollQuestion').value='';$('option1').value='';$('option2').value='';$('pollStatus').textContent='Anket oluşturuldu.';loadPolls();
+});
+})();
+</script></body></html>
